@@ -4,7 +4,8 @@ import uuid
 import datetime
 from fastapi import APIRouter, HTTPException, Query, status
 from typing import Optional, List
-from app.db.database import get_db_connection
+import pymongo
+from app.db.database import get_db
 from app.schemas.history import HistoryListResponse, AssessmentHistoryItem
 from app.schemas.prediction import PatientInput
 from app.ml.model_loader import ml_service
@@ -18,80 +19,63 @@ def get_assessment_history(
     user_email: Optional[str] = Query(None, description="Filter by logged-in user email"),
     limit: int = Query(100, ge=1, le=500)
 ):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    db = get_db()
 
-    query = "SELECT * FROM assessments WHERE 1=1"
-    count_query = "SELECT COUNT(*) FROM assessments WHERE 1=1"
-    params = []
-    count_params = []
+    query = {}
 
-    clean_email = str(user_email).strip().lower() if isinstance(user_email, str) and user_email.strip() else None
+    clean_email = str(user_email).strip().lower() if isinstance(user_email, str) and user_email.strip() and user_email.strip().lower() != "none" else None
     clean_search = str(search).strip() if isinstance(search, str) and search.strip() else None
     clean_risk = str(risk_level).strip() if isinstance(risk_level, str) and risk_level.strip() and risk_level.strip() != "All" else None
     clean_limit = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 100
 
     if clean_email:
-        query += " AND user_email = ?"
-        count_query += " AND user_email = ?"
-        params.append(clean_email)
-        count_params.append(clean_email)
+        query["user_email"] = clean_email
 
     if clean_search:
-        query += " AND (patient_name LIKE ? OR summary_message LIKE ? OR id LIKE ?)"
-        count_query += " AND (patient_name LIKE ? OR summary_message LIKE ? OR id LIKE ?)"
-        term = f"%{clean_search}%"
-        params.extend([term, term, term])
-        count_params.extend([term, term, term])
+        query["$or"] = [
+            {"patient_name": {"$regex": clean_search, "$options": "i"}},
+            {"summary_message": {"$regex": clean_search, "$options": "i"}},
+            {"id": {"$regex": clean_search, "$options": "i"}}
+        ]
 
     if clean_risk:
-        query += " AND risk_level LIKE ?"
-        count_query += " AND risk_level LIKE ?"
-        params.append(f"%{clean_risk}%")
-        count_params.append(f"%{clean_risk}%")
+        query["risk_level"] = {"$regex": clean_risk, "$options": "i"}
 
-    query += " ORDER BY timestamp DESC LIMIT ?"
-    params.append(clean_limit)
+    cursor = db.assessments.find(query).sort([("timestamp", pymongo.DESCENDING)]).limit(clean_limit)
+    rows = list(cursor)
+    total_count = db.assessments.count_documents(query)
 
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    
     items = []
     for r in rows:
-        input_data = {}
-        try:
-            if r["input_data_json"]:
+        input_data = r.get("input_data") or {}
+        if not input_data and r.get("input_data_json"):
+            try:
                 input_data = json.loads(r["input_data_json"])
-        except Exception:
-            pass
+            except Exception:
+                pass
 
         items.append(AssessmentHistoryItem(
-            id=r["id"],
-            timestamp=r["timestamp"],
-            patient_name=r["patient_name"],
-            age=r["age"] or 0,
-            gender=r["gender"] or "Unspecified",
-            risk_score=r["risk_score"],
-            risk_level=r["risk_level"],
-            probability_percentage=r["probability_percentage"],
-            heart_health_score=r["heart_health_score"],
-            systolic_bp=r["systolic_bp"],
-            diastolic_bp=r["diastolic_bp"],
-            cholesterol=r["cholesterol"],
-            ejection_fraction=r["ejection_fraction"],
-            serum_creatinine=r["serum_creatinine"],
-            smoking=r["smoking"],
-            chest_pain=r["chest_pain"],
-            model_source=r["model_source"],
-            summary_message=r["summary_message"] or "",
+            id=r.get("id", ""),
+            timestamp=r.get("timestamp", ""),
+            patient_name=r.get("patient_name", ""),
+            age=r.get("age") or 0,
+            gender=r.get("gender") or "Unspecified",
+            risk_score=r.get("risk_score", 0),
+            risk_level=r.get("risk_level", "Unknown"),
+            probability_percentage=r.get("probability_percentage", 0.0),
+            heart_health_score=r.get("heart_health_score", 0),
+            systolic_bp=r.get("systolic_bp"),
+            diastolic_bp=r.get("diastolic_bp"),
+            cholesterol=r.get("cholesterol"),
+            ejection_fraction=r.get("ejection_fraction"),
+            serum_creatinine=r.get("serum_creatinine"),
+            smoking=r.get("smoking"),
+            chest_pain=r.get("chest_pain"),
+            model_source=r.get("model_source", "HeartCare Heuristic"),
+            summary_message=r.get("summary_message") or "",
             input_data=input_data
         ))
 
-    # Count total matching filters
-    cursor.execute(count_query, count_params)
-    total_count = cursor.fetchone()[0]
-
-    conn.close()
     return HistoryListResponse(total=total_count, items=items)
 
 @router.post("/generate-dynamic")
@@ -100,13 +84,12 @@ def generate_dynamic_history(
     user_email: Optional[str] = Query(default=None)
 ):
     """
-    Generates dynamic clinical patient records evaluated with the LightGBM ML model.
+    Generates dynamic clinical patient records evaluated with the LightGBM ML model and persists to MongoDB.
     """
     clean_count = int(count) if isinstance(count, (int, str)) and str(count).isdigit() else 5
-    clean_user_email = str(user_email).strip().lower() if isinstance(user_email, str) and user_email.strip() else None
+    clean_user_email = str(user_email).strip().lower() if isinstance(user_email, str) and user_email.strip() and user_email.strip().lower() != "none" else None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    db = get_db()
 
     male_first_names = ["Aarav", "Rohan", "Vikram", "Aditya", "Rahul", "Siddharth", "Amit", "Rajesh", "Manoj", "Suresh", "Arjun", "Alok", "Devendra", "Kiran", "Nikhil", "Pranav", "Harish", "Ashok", "Gaurav", "Sunil"]
     female_first_names = ["Priya", "Ananya", "Sneha", "Pooja", "Kavita", "Neha", "Deepika", "Sunita", "Anjali", "Meera", "Ritu", "Divya", "Swati", "Shalini", "Rekha", "Lakshmi", "Preeti", "Tanvi", "Gayatri", "Suman"]
@@ -114,6 +97,7 @@ def generate_dynamic_history(
 
     now = datetime.datetime.now()
     generated = []
+    docs_to_insert = []
 
     for i in range(clean_count):
         gender = random.choice(["Male", "Female"])
@@ -230,35 +214,35 @@ def generate_dynamic_history(
 
         pred_id = f"PRED-DYN{uuid.uuid4().hex[:6].upper()}"
 
-        cursor.execute("""
-        INSERT INTO assessments (
-            id, user_email, patient_name, timestamp, age, gender, risk_score, risk_level, probability_percentage,
-            heart_health_score, systolic_bp, diastolic_bp, cholesterol, ejection_fraction, serum_creatinine,
-            smoking, chest_pain, model_source, summary_message, input_data_json, response_data_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            pred_id,
-            clean_user_email,
-            name,
-            timestamp,
-            age,
-            gender,
-            pred_res.risk_score,
-            pred_res.risk_level,
-            pred_res.probability_percentage,
-            pred_res.heart_health_score,
-            systolic_bp,
-            diastolic_bp,
-            cholesterol,
-            ejection_fraction,
-            serum_creatinine,
-            smoking,
-            chest_pain,
-            pred_res.model_source,
-            pred_res.summary_message,
-            json.dumps(patient_input.model_dump()),
-            json.dumps(pred_res.model_dump())
-        ))
+        input_dict = patient_input.model_dump()
+        result_dict = pred_res.model_dump()
+
+        doc = {
+            "id": pred_id,
+            "user_email": clean_user_email,
+            "patient_name": name,
+            "timestamp": timestamp,
+            "age": age,
+            "gender": gender,
+            "risk_score": pred_res.risk_score,
+            "risk_level": pred_res.risk_level,
+            "probability_percentage": pred_res.probability_percentage,
+            "heart_health_score": pred_res.heart_health_score,
+            "systolic_bp": systolic_bp,
+            "diastolic_bp": diastolic_bp,
+            "cholesterol": cholesterol,
+            "ejection_fraction": ejection_fraction,
+            "serum_creatinine": serum_creatinine,
+            "smoking": smoking,
+            "chest_pain": chest_pain,
+            "model_source": pred_res.model_source,
+            "summary_message": pred_res.summary_message,
+            "input_data": input_dict,
+            "input_data_json": json.dumps(input_dict),
+            "response_data": result_dict,
+            "response_data_json": json.dumps(result_dict)
+        }
+        docs_to_insert.append(doc)
 
         generated.append({
             "id": pred_id,
@@ -268,73 +252,63 @@ def generate_dynamic_history(
             "risk_level": pred_res.risk_level
         })
 
-    conn.commit()
-    conn.close()
+    if docs_to_insert:
+        db.assessments.insert_many(docs_to_insert)
 
     return {
         "status": "success",
-        "message": f"Successfully generated {len(generated)} dynamic clinical assessments!",
+        "message": f"Successfully generated {len(generated)} dynamic clinical assessments in MongoDB!",
         "generated": generated,
         "items": generated
     }
 
 @router.get("/{id}")
 def get_assessment_by_id(id: str):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM assessments WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    conn.close()
+    db = get_db()
+    row = db.assessments.find_one({"id": id})
 
     if not row:
         raise HTTPException(status_code=404, detail="Assessment record not found")
 
-    resp_data = {}
-    if row["response_data_json"]:
+    resp_data = row.get("response_data") or {}
+    if not resp_data and row.get("response_data_json"):
         try:
             resp_data = json.loads(row["response_data_json"])
         except Exception:
             pass
 
     return {
-        "id": row["id"],
-        "patient_name": row["patient_name"],
-        "timestamp": row["timestamp"],
-        "age": row["age"],
-        "gender": row["gender"],
-        "risk_score": row["risk_score"],
-        "risk_level": row["risk_level"],
-        "probability_percentage": row["probability_percentage"],
-        "heart_health_score": row["heart_health_score"],
-        "systolic_bp": row["systolic_bp"],
-        "diastolic_bp": row["diastolic_bp"],
-        "cholesterol": row["cholesterol"],
-        "ejection_fraction": row["ejection_fraction"],
-        "serum_creatinine": row["serum_creatinine"],
-        "smoking": row["smoking"],
-        "chest_pain": row["chest_pain"],
-        "model_source": row["model_source"],
-        "summary_message": row["summary_message"],
+        "id": row.get("id"),
+        "patient_name": row.get("patient_name"),
+        "timestamp": row.get("timestamp"),
+        "age": row.get("age"),
+        "gender": row.get("gender"),
+        "risk_score": row.get("risk_score"),
+        "risk_level": row.get("risk_level"),
+        "probability_percentage": row.get("probability_percentage"),
+        "heart_health_score": row.get("heart_health_score"),
+        "systolic_bp": row.get("systolic_bp"),
+        "diastolic_bp": row.get("diastolic_bp"),
+        "cholesterol": row.get("cholesterol"),
+        "ejection_fraction": row.get("ejection_fraction"),
+        "serum_creatinine": row.get("serum_creatinine"),
+        "smoking": row.get("smoking"),
+        "chest_pain": row.get("chest_pain"),
+        "model_source": row.get("model_source"),
+        "summary_message": row.get("summary_message"),
         "details": resp_data
     }
 
 @router.delete("/{id}")
 def delete_assessment(id: str):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM assessments WHERE id = ?", (id,))
-    conn.commit()
-    deleted = cursor.rowcount > 0
-    conn.close()
-    if not deleted:
+    db = get_db()
+    result = db.assessments.delete_one({"id": id})
+    if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Record not found")
     return {"status": "success", "message": f"Assessment record {id} deleted", "id": id}
 
 @router.delete("")
 def clear_all_history():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM assessments")
-    conn.commit()
-    conn.close()
-    return {"status": "success", "message": "All assessment records cleared"}
+    db = get_db()
+    db.assessments.delete_many({})
+    return {"status": "success", "message": "All assessment records cleared from MongoDB"}

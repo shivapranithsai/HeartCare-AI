@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter, HTTPException, status
 from app.schemas.prediction import PatientInput, PredictionResponse, SimulationInput
 from app.ml.model_loader import ml_service
-from app.db.database import get_db_connection
+from app.db.database import get_db
 
 router = APIRouter()
 
@@ -12,44 +12,44 @@ def run_prediction(data: PatientInput):
         # Run ML inference
         result = ml_service.predict(data)
 
-        # Persist to SQLite DB
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Persist to MongoDB assessments collection
+        db = get_db()
         
         sbp = data.systolic_bp or (150 if data.blood_pressure == "High" else 135 if data.blood_pressure == "Elevated" else 120)
         dbp = data.diastolic_bp or (95 if data.blood_pressure == "High" else 85 if data.blood_pressure == "Elevated" else 78)
 
-        cursor.execute("""
-        INSERT INTO assessments (
-            id, user_email, patient_name, timestamp, age, gender, risk_score, risk_level, probability_percentage,
-            heart_health_score, systolic_bp, diastolic_bp, cholesterol, ejection_fraction, serum_creatinine,
-            smoking, chest_pain, model_source, summary_message, input_data_json, response_data_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            result.prediction_id,
-            data.user_email,
-            result.patient_name,
-            result.timestamp,
-            data.age,
-            data.gender,
-            result.risk_score,
-            result.risk_level,
-            result.probability_percentage,
-            result.heart_health_score,
-            sbp,
-            dbp,
-            data.cholesterol,
-            data.ejection_fraction,
-            data.serum_creatinine,
-            data.smoking,
-            data.chest_pain,
-            result.model_source,
-            result.summary_message,
-            json.dumps(data.model_dump()),
-            json.dumps(result.model_dump())
-        ))
-        conn.commit()
-        conn.close()
+        clean_user_email = data.user_email.strip().lower() if data.user_email and isinstance(data.user_email, str) and data.user_email.strip() else None
+
+        input_dict = data.model_dump()
+        result_dict = result.model_dump()
+
+        assessment_doc = {
+            "id": result.prediction_id,
+            "user_email": clean_user_email,
+            "patient_name": result.patient_name,
+            "timestamp": result.timestamp,
+            "age": data.age,
+            "gender": data.gender,
+            "risk_score": result.risk_score,
+            "risk_level": result.risk_level,
+            "probability_percentage": result.probability_percentage,
+            "heart_health_score": result.heart_health_score,
+            "systolic_bp": sbp,
+            "diastolic_bp": dbp,
+            "cholesterol": data.cholesterol,
+            "ejection_fraction": data.ejection_fraction,
+            "serum_creatinine": data.serum_creatinine,
+            "smoking": data.smoking,
+            "chest_pain": data.chest_pain,
+            "model_source": result.model_source,
+            "summary_message": result.summary_message,
+            "input_data": input_dict,
+            "input_data_json": json.dumps(input_dict),
+            "response_data": result_dict,
+            "response_data_json": json.dumps(result_dict)
+        }
+
+        db.assessments.insert_one(assessment_doc)
 
         return result
     except Exception as e:

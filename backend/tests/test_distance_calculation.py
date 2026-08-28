@@ -6,7 +6,7 @@ backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-from app.db.database import init_db, get_db_connection
+from app.db.database import init_db, get_db
 from app.api.endpoints.hospitals import list_hospitals, calculate_haversine_distance
 
 class TestHospitalDistanceCalculation(unittest.TestCase):
@@ -38,9 +38,8 @@ class TestHospitalDistanceCalculation(unittest.TestCase):
         - Thiruvananthapuram ~ 1000 km
         """
         user_lat, user_lon = 17.3850, 78.4867
-        conn = get_db_connection()
-        rows = conn.cursor().execute("SELECT name, city, latitude, longitude FROM hospitals").fetchall()
-        conn.close()
+        db = get_db()
+        rows = list(db.hospitals.find({}, {"name": 1, "city": 1, "latitude": 1, "longitude": 1}))
 
         by_name = {r["name"]: calculate_haversine_distance(user_lat, user_lon, r["latitude"], r["longitude"]) for r in rows}
 
@@ -80,9 +79,8 @@ class TestHospitalDistanceCalculation(unittest.TestCase):
         - Thiruvananthapuram > 2200 km
         """
         user_lat, user_lon = 28.6139, 77.2090
-        conn = get_db_connection()
-        rows = conn.cursor().execute("SELECT name, city, latitude, longitude FROM hospitals").fetchall()
-        conn.close()
+        db = get_db()
+        rows = list(db.hospitals.find({}, {"name": 1, "city": 1, "latitude": 1, "longitude": 1}))
 
         by_name = {r["name"]: calculate_haversine_distance(user_lat, user_lon, r["latitude"], r["longitude"]) for r in rows}
 
