@@ -1,27 +1,23 @@
 import json
 from fastapi import APIRouter, Query
 from typing import Optional
-from app.db.database import get_db_connection
+import pymongo
+from app.db.database import get_db
 
 router = APIRouter()
 
 @router.get("")
 def get_analytics_overview(user_email: Optional[str] = Query(None, description="Filter by logged-in user email")):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    db = get_db()
 
-    where_clause = ""
-    params = []
+    match_filter = {}
     clean_email = str(user_email).strip().lower() if isinstance(user_email, str) and user_email.strip() and user_email.strip().lower() != "none" else None
     if clean_email:
-        where_clause = " WHERE user_email = ?"
-        params.append(clean_email)
+        match_filter["user_email"] = clean_email
 
-    cursor.execute(f"SELECT COUNT(*) FROM assessments{where_clause}", params)
-    total = cursor.fetchone()[0]
+    total = db.assessments.count_documents(match_filter)
 
     if total == 0:
-        conn.close()
         return {
             "has_assessments": False,
             "latest_assessment": None,
@@ -32,32 +28,54 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
             "timeline": []
         }
 
-    cursor.execute(f"SELECT AVG(risk_score), AVG(heart_health_score) FROM assessments{where_clause}", params)
-    avg_risk, avg_health = cursor.fetchone()
+    # Aggregate averages and distribution
+    pipeline = [
+        {"$match": match_filter},
+        {
+            "$group": {
+                "_id": None,
+                "avg_risk": {"$avg": "$risk_score"},
+                "avg_health": {"$avg": "$heart_health_score"}
+            }
+        }
+    ]
+    agg_res = list(db.assessments.aggregate(pipeline))
+    avg_risk = agg_res[0]["avg_risk"] if agg_res else None
+    avg_health = agg_res[0]["avg_health"] if agg_res else None
 
-    cursor.execute(f"SELECT risk_level, COUNT(*) FROM assessments{where_clause} GROUP BY risk_level", params)
-    dist_rows = cursor.fetchall()
+    # Distribution pipeline
+    dist_pipeline = [
+        {"$match": match_filter},
+        {
+            "$group": {
+                "_id": "$risk_level",
+                "count": {"$sum": 1}
+            }
+        }
+    ]
+    dist_rows = list(db.assessments.aggregate(dist_pipeline))
     dist = {"Low Risk": 0, "Moderate Risk": 0, "High Risk": 0, "Critical Risk": 0}
-    for level, count in dist_rows:
+    for row in dist_rows:
+        level = row.get("_id") or ""
+        cnt = row.get("count", 0)
         for k in dist:
             if k.lower() in level.lower():
-                dist[k] += count
+                dist[k] += cnt
                 break
 
     # Fetch latest evaluation for this user
-    cursor.execute(f"SELECT * FROM assessments{where_clause} ORDER BY timestamp DESC, rowid DESC LIMIT 1", params)
-    latest_row = cursor.fetchone()
+    latest_row = db.assessments.find_one(match_filter, sort=[("timestamp", pymongo.DESCENDING), ("_id", pymongo.DESCENDING)])
     latest_assessment = None
     if latest_row:
-        resp_data = {}
-        if latest_row["response_data_json"]:
+        resp_data = latest_row.get("response_data") or {}
+        if not resp_data and latest_row.get("response_data_json"):
             try:
                 resp_data = json.loads(latest_row["response_data_json"])
             except Exception:
                 pass
 
-        input_data = {}
-        if latest_row["input_data_json"]:
+        input_data = latest_row.get("input_data") or {}
+        if not input_data and latest_row.get("input_data_json"):
             try:
                 input_data = json.loads(latest_row["input_data_json"])
             except Exception:
@@ -66,46 +84,49 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
         fbs_val = input_data.get("fasting_blood_sugar") or (140 if input_data.get("fbs") == 1 else 95)
 
         latest_assessment = {
-            "id": latest_row["id"],
-            "patient_name": latest_row["patient_name"],
-            "timestamp": latest_row["timestamp"],
-            "risk_score": latest_row["risk_score"],
-            "heart_health_score": latest_row["heart_health_score"],
-            "probability_percentage": latest_row["probability_percentage"],
-            "risk_level": latest_row["risk_level"],
+            "id": latest_row.get("id"),
+            "patient_name": latest_row.get("patient_name"),
+            "timestamp": latest_row.get("timestamp"),
+            "risk_score": latest_row.get("risk_score"),
+            "heart_health_score": latest_row.get("heart_health_score"),
+            "probability_percentage": latest_row.get("probability_percentage"),
+            "risk_level": latest_row.get("risk_level"),
             "bmi": resp_data.get("bmi", 24.2),
             "bmi_category": resp_data.get("bmi_category", "Normal"),
-            "systolic_bp": latest_row["systolic_bp"],
-            "diastolic_bp": latest_row["diastolic_bp"],
-            "cholesterol": latest_row["cholesterol"],
-            "ejection_fraction": latest_row["ejection_fraction"],
-            "serum_creatinine": latest_row["serum_creatinine"],
+            "systolic_bp": latest_row.get("systolic_bp"),
+            "diastolic_bp": latest_row.get("diastolic_bp"),
+            "cholesterol": latest_row.get("cholesterol"),
+            "ejection_fraction": latest_row.get("ejection_fraction"),
+            "serum_creatinine": latest_row.get("serum_creatinine"),
             "fasting_blood_sugar": fbs_val,
-            "smoking": latest_row["smoking"],
-            "chest_pain": latest_row["chest_pain"],
+            "smoking": latest_row.get("smoking"),
+            "chest_pain": latest_row.get("chest_pain"),
             "top_risk_factors": resp_data.get("top_risk_factors", []),
             "protective_factors": resp_data.get("protective_factors", []),
             "recommendations": resp_data.get("recommendations", []),
-            "summary_message": latest_row["summary_message"] or resp_data.get("summary_message", ""),
-            "model_source": latest_row["model_source"]
+            "summary_message": latest_row.get("summary_message") or resp_data.get("summary_message", ""),
+            "model_source": latest_row.get("model_source", "HeartCare LightGBM")
         }
 
     # Recent timeline points for graph
-    cursor.execute(f"SELECT id, timestamp, risk_score, heart_health_score, patient_name, risk_level FROM assessments{where_clause} ORDER BY timestamp ASC LIMIT 20", params)
-    timeline_rows = cursor.fetchall()
+    timeline_cursor = db.assessments.find(
+        match_filter,
+        projection={"id": 1, "timestamp": 1, "risk_score": 1, "heart_health_score": 1, "patient_name": 1, "risk_level": 1}
+    ).sort([("timestamp", pymongo.ASCENDING)]).limit(20)
+
+    timeline_rows = list(timeline_cursor)
     timeline = [
         {
-            "id": r["id"],
-            "date": r["timestamp"].split(" ")[0] if " " in r["timestamp"] else r["timestamp"],
-            "risk_score": r["risk_score"],
-            "health_score": r["heart_health_score"],
-            "patient": r["patient_name"],
-            "risk_level": r["risk_level"]
+            "id": r.get("id", ""),
+            "date": r.get("timestamp", "").split(" ")[0] if " " in r.get("timestamp", "") else r.get("timestamp", ""),
+            "risk_score": r.get("risk_score"),
+            "health_score": r.get("heart_health_score"),
+            "patient": r.get("patient_name"),
+            "risk_level": r.get("risk_level")
         }
         for r in timeline_rows
     ]
 
-    conn.close()
     return {
         "has_assessments": True,
         "latest_assessment": latest_assessment,

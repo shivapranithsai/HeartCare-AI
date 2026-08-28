@@ -1,14 +1,36 @@
-# Dependencies
+# ==========================================
+# Environment Variables & Sensitive Secrets
+# ==========================================
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# ==========================================
+# Node.js & Frontend Dependencies / Build
+# ==========================================
 node_modules/
+*/node_modules/
 .pnp
 .pnp.js
-
-# Build outputs
 dist/
+dist-ssr/
 build/
+*/dist/
+*/build/
+.vite/
+.cache/
+*.cache
 
-# Python
+# ==========================================
+# Python Bytecode, Caches & Virtual Envs
+# ==========================================
 __pycache__/
+*/__pycache__/
+*/**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -19,25 +41,54 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+*/.venv/
+*.egg-info/
+.eggs/
 
-# Environment Variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# ==========================================
+# Testing & Code Coverage
+# ==========================================
+.coverage
+.coverage.*
+.pytest_cache/
+htmlcov/
+coverage/
 
-# Logs
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-*.log
+pnpm-debug.log*
+tmp/
+temp/
 
-# IDE & OS
+# ==========================================
+# IDE & Code Editor Files
+# ==========================================
 .vscode/
 .idea/
-.DS_Store
-Thumbs.db
+*.swp
+*.swo
+*~
 
-# Database (optional local scratch, but schema will auto-init)
-backend/*.db-journal
+# ==========================================
+# Operating System Files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+[Dd]esktop.ini
+
+# ==========================================
+# Local Database Temp Files & Journals
+# ==========================================
+*.db-journal
+*.db-wal
+*.db-shm

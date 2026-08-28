@@ -8,7 +8,7 @@ backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-from app.db.database import get_db_connection, init_db
+from app.db.database import get_db, init_db
 from app.schemas.prediction import PatientInput
 from app.api.endpoints.predict import run_prediction
 from app.api.endpoints.analytics import get_analytics_overview
@@ -18,13 +18,9 @@ class TestUserDashboardScores(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         init_db()
-
         # Clear any prior test assessments for test users to ensure clean isolation
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM assessments WHERE user_email IN ('user_a@health.in', 'user_b@health.in', 'user_c@health.in')")
-        conn.commit()
-        conn.close()
+        db = get_db()
+        db.assessments.delete_many({"user_email": {"$in": ["user_a@health.in", "user_b@health.in", "user_c@health.in"]}})
 
     def test_01_user_a_healthy_submission_and_personalized_scores(self):
         """User A submits healthy biomarkers -> Analytics returns low risk (<25%) and high health score (>75)."""
@@ -163,11 +159,8 @@ class TestUserDashboardScores(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         # Clean up test user records
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM assessments WHERE user_email IN ('user_a@health.in', 'user_b@health.in', 'user_c@health.in')")
-        conn.commit()
-        conn.close()
+        db = get_db()
+        db.assessments.delete_many({"user_email": {"$in": ["user_a@health.in", "user_b@health.in", "user_c@health.in"]}})
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

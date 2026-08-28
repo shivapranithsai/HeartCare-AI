@@ -10,9 +10,14 @@ from app.ml.model_loader import ml_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database and load model
-    print("[Server Startup] Initializing SQLite database...")
-    init_db()
+    # Startup: initialize MongoDB and load ML model
+    print("[Server Startup] Connecting to MongoDB Atlas...")
+    connected = init_db()
+    if connected:
+        print("[Server Startup] MongoDB connected successfully.")
+    else:
+        print("[Server Startup] Warning: MongoDB initialization failed. Please verify MONGODB_URI in .env.")
+    
     print("[Server Startup] Checking ML Model Service status...")
     if ml_service.is_custom_loaded:
         print("[Server Startup] Custom ML Model loaded and ready!")

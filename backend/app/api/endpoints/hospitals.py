@@ -1,9 +1,11 @@
 import math
+import uuid
+import datetime
 import urllib.parse
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, status
 from typing import Optional, List
 from pydantic import BaseModel
-from app.db.database import get_db_connection
+from app.db.database import get_db
 
 router = APIRouter()
 
@@ -18,6 +20,7 @@ class AppointmentBookingRequest(BaseModel):
     patient_name: str
     contact_phone: str
     preferred_date: str
+    reason_for_visit: Optional[str] = None
     notes: Optional[str] = None
 
 @router.get("")
@@ -73,30 +76,29 @@ def list_hospitals(
                     "hospitals": city_live
                 }
 
-    # 3. Fallback: Query local SQLite hospital database
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    query = "SELECT * FROM hospitals WHERE 1=1"
-    params = []
+    # 3. Fallback: Query MongoDB hospital database
+    db = get_db()
+    query = {}
 
     if city_val and city_val.strip() and city_val.lower() != "all":
-        query += " AND (city LIKE ? OR name LIKE ? OR address LIKE ? OR specialties LIKE ?)"
-        term = f"%{city_val.strip()}%"
-        params.extend([term, term, term, term])
+        term = city_val.strip()
+        query["$or"] = [
+            {"city": {"$regex": term, "$options": "i"}},
+            {"name": {"$regex": term, "$options": "i"}},
+            {"address": {"$regex": term, "$options": "i"}},
+            {"specialties": {"$regex": term, "$options": "i"}}
+        ]
 
     if emergency_val:
-        query += " AND emergency_available = 1"
+        query["emergency_available"] = True
 
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    conn.close()
+    rows = list(db.hospitals.find(query))
 
     hospitals = []
 
     for r in rows:
-        lat = r["latitude"] if "latitude" in r.keys() else None
-        lon = r["longitude"] if "longitude" in r.keys() else None
+        lat = r.get("latitude")
+        lon = r.get("longitude")
         
         # Calculate real-time geodetic distance only if user GPS coordinates are provided
         if has_user_coords and lat is not None and lon is not None:
@@ -114,19 +116,22 @@ def list_hospitals(
         if lat and lon:
             maps_url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}"
         else:
-            dest_query = urllib.parse.quote(f"{r['name']}, {r['city']}")
+            dest_query = urllib.parse.quote(f"{r.get('name')}, {r.get('city')}")
             maps_url = f"https://www.google.com/maps/dir/?api=1&destination={dest_query}"
 
+        specialties_raw = r.get("specialties")
+        specialties_list = [s.strip() for s in specialties_raw.split(",")] if isinstance(specialties_raw, str) and specialties_raw else specialties_raw if isinstance(specialties_raw, list) else []
+
         hospitals.append({
-            "id": r["id"],
-            "name": r["name"],
-            "city": r["city"],
-            "address": r["address"],
-            "phone": r["phone"],
-            "rating": r["rating"],
-            "review_count": r["review_count"],
-            "emergency_available": bool(r["emergency_available"]),
-            "specialties": [s.strip() for s in r["specialties"].split(",")] if r["specialties"] else [],
+            "id": r.get("id"),
+            "name": r.get("name"),
+            "city": r.get("city"),
+            "address": r.get("address"),
+            "phone": r.get("phone"),
+            "rating": r.get("rating"),
+            "review_count": r.get("review_count"),
+            "emergency_available": bool(r.get("emergency_available")),
+            "specialties": specialties_list,
             "distance_km": dist,
             "eta_minutes": eta_minutes,
             "latitude": lat,
@@ -148,4 +153,39 @@ def list_hospitals(
         "data_source": "Verified Cardiology Directory",
         "user_location": {"lat": user_lat_val, "lon": user_lon_val} if has_user_coords else None,
         "hospitals": hospitals
+    }
+
+@router.post("/book")
+def book_consultation(req: AppointmentBookingRequest):
+    """
+    Persists cardiology appointment consultations to MongoDB.
+    """
+    db = get_db()
+    booking_id = f"APPT-{uuid.uuid4().hex[:8].upper()}"
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    booking_doc = {
+        "booking_id": booking_id,
+        "hospital_id": req.hospital_id,
+        "patient_name": req.patient_name,
+        "contact_phone": req.contact_phone,
+        "preferred_date": req.preferred_date,
+        "reason_for_visit": req.reason_for_visit or req.notes or "Cardiology Consultation",
+        "created_at": now_str,
+        "status": "confirmed"
+    }
+
+    db.appointments.insert_one(booking_doc)
+
+    return {
+        "status": "success",
+        "message": "Cardiology consultation appointment booked successfully!",
+        "booking_id": booking_id,
+        "booking": {
+            "booking_id": booking_id,
+            "hospital_id": req.hospital_id,
+            "patient_name": req.patient_name,
+            "preferred_date": req.preferred_date,
+            "status": "confirmed"
+        }
     }

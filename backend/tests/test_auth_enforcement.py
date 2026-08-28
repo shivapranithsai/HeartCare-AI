@@ -8,7 +8,7 @@ backend_dir = Path(__file__).resolve().parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-from app.db.database import get_db_connection, init_db
+from app.db.database import get_db, init_db
 from app.schemas.auth import UserRegister, UserLogin
 from app.api.endpoints.auth import register_user, login_user
 
@@ -17,11 +17,8 @@ class TestAuthEnforcement(unittest.TestCase):
     def setUpClass(cls):
         init_db()
         # Clean test accounts
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE email IN ('new_user_unregistered@health.in', 'registered_user@health.in')")
-        conn.commit()
-        conn.close()
+        db = get_db()
+        db.users.delete_many({"email": {"$in": ["new_user_unregistered@health.in", "registered_user@health.in"]}})
 
     def test_01_unregistered_user_cannot_login_without_signup(self):
         """Unregistered user attempting to sign in must be rejected with 404 error requiring sign up."""
@@ -80,11 +77,8 @@ class TestAuthEnforcement(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE email IN ('new_user_unregistered@health.in', 'registered_user@health.in')")
-        conn.commit()
-        conn.close()
+        db = get_db()
+        db.users.delete_many({"email": {"$in": ["new_user_unregistered@health.in", "registered_user@health.in"]}})
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
