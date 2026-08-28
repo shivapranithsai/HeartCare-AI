@@ -4,7 +4,8 @@
  * Automatically falls back to resilient local calculation if backend is offline.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api").trim().replace(/\/+$/, "");
+const API_BASE_URL = rawBaseUrl.endsWith("/api") ? rawBaseUrl : `${rawBaseUrl}/api`;
 
 // Helper for HTTP requests
 async function fetchWithTimeout(resource, options = {}) {
