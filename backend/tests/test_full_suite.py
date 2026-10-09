@@ -10,6 +10,16 @@ BASE_URL = "http://127.0.0.1:8000/api"
 
 class TestFullPlatformIntegration(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        try:
+            req = urllib.request.Request(f"{BASE_URL}/health")
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.getcode() != 200:
+                    raise unittest.SkipTest("FastAPI server returned non-200")
+        except Exception:
+            raise unittest.SkipTest(f"FastAPI dev server not running on {BASE_URL} - skipping live HTTP integration suite")
+
     def _post(self, endpoint, data):
         req = urllib.request.Request(
             f"{BASE_URL}{endpoint}",

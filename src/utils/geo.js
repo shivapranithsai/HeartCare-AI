@@ -62,3 +62,24 @@ export function formatDistance(distKm) {
   // Large inter-city / inter-state distances with comma separators
   return `${Math.round(num).toLocaleString()} km away`;
 }
+
+/**
+ * Standard GPS coordinate reference points for major Indian metropolitan and tier-1/tier-2 healthcare hubs.
+ */
+export const INDIAN_CITY_COORDINATES = {
+  "Vadodara": { lat: 22.3072, lon: 73.1812, state: "Gujarat" },
+  "Ahmedabad": { lat: 23.0225, lon: 72.5714, state: "Gujarat" },
+  "Mumbai": { lat: 19.0760, lon: 72.8777, state: "Maharashtra" },
+  "New Delhi": { lat: 28.6139, lon: 77.2090, state: "Delhi" },
+  "Bengaluru": { lat: 12.9716, lon: 77.5946, state: "Karnataka" },
+  "Chennai": { lat: 13.0827, lon: 80.2707, state: "Tamil Nadu" },
+  "Hyderabad": { lat: 17.3850, lon: 78.4867, state: "Telangana" },
+  "Kolkata": { lat: 22.5726, lon: 88.3639, state: "West Bengal" },
+  "Pune": { lat: 18.5204, lon: 73.8567, state: "Maharashtra" },
+  "Chandigarh": { lat: 30.7333, lon: 76.7794, state: "Punjab/Haryana" },
+  "Thiruvananthapuram": { lat: 8.5241, lon: 76.9366, state: "Kerala" },
+  "Jaipur": { lat: 26.9124, lon: 75.7873, state: "Rajasthan" },
+  "Lucknow": { lat: 26.8467, lon: 80.9462, state: "Uttar Pradesh" },
+  "Bhubaneswar": { lat: 20.2961, lon: 85.8245, state: "Odisha" }
+};
+

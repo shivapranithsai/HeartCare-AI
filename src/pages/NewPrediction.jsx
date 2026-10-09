@@ -29,7 +29,7 @@ export default function NewPrediction() {
   // [age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]
   const [form, setForm] = useState({
     user_email: localStorage.getItem("userEmail") || "",
-    name: localStorage.getItem("userName") || "Aarav Sharma",
+    name: localStorage.getItem("userName") || "Patient",
     
     // 1. age
     age: 54,
@@ -96,150 +96,28 @@ export default function NewPrediction() {
     setForm((prev) => ({ ...prev, [field]: val }));
   };
 
-  // Presets mapping to 13 Cleveland Features with authentic Indian clinical profiles
-  const loadPreset = (type) => {
-    if (type === "healthy") {
-      setForm({
-        name: "Aarav Sharma",
-        age: 32,
-        sex: 1,
-        gender: "Male",
-        cp: 3, // asymptomatic
-        chest_pain: "None",
-        trestbps: 114,
-        systolic_bp: 114,
-        diastolic_bp: 74,
-        chol: 172,
-        cholesterol: 172,
-        fbs: 0,
-        fasting_blood_sugar: 88,
-        restecg: 0,
-        resting_ecg: "Normal",
-        thalach: 174,
-        heart_rate: 68,
-        exang: 0,
-        exercise_angina: "No",
-        oldpeak: 0.0,
-        st_depression: 0.0,
-        slope: 0, // upsloping
-        st_slope: "Upsloping",
-        ca: 0,
-        thal: 1, // normal
-        ejection_fraction: 65,
-        serum_creatinine: 0.8,
-        height: 178,
-        weight: 72,
-        smoking: "Never",
-        exercise_days: "4-5 days",
-        sleep_hours: "7-9 hours",
-        stress_level: "Low"
-      });
-    } else if (type === "moderate") {
-      setForm({
-        name: "Rajesh Patel",
-        age: 56,
-        sex: 1,
-        gender: "Male",
-        cp: 1, // atypical angina
-        chest_pain: "Mild",
-        trestbps: 138,
-        systolic_bp: 138,
-        diastolic_bp: 88,
-        chol: 228,
-        cholesterol: 228,
-        fbs: 0,
-        fasting_blood_sugar: 110,
-        restecg: 1, // ST-T wave
-        resting_ecg: "ST-T Abnormality",
-        thalach: 142,
-        heart_rate: 80,
-        exang: 0,
-        exercise_angina: "No",
-        oldpeak: 1.4,
-        st_depression: 1.4,
-        slope: 1, // flat
-        st_slope: "Flat",
-        ca: 1,
-        thal: 2, // fixed defect
-        ejection_fraction: 48,
-        serum_creatinine: 1.2,
-        height: 172,
-        weight: 82,
-        smoking: "Occasionally",
-        exercise_days: "1-2 days",
-        sleep_hours: "5-7 hours",
-        stress_level: "High"
-      });
-    } else if (type === "high") {
-      setForm({
-        name: "Sunita Deshmukh",
-        age: 68,
-        sex: 0,
-        gender: "Female",
-        cp: 0, // typical angina
-        chest_pain: "Severe",
-        trestbps: 168,
-        systolic_bp: 168,
-        diastolic_bp: 102,
-        chol: 275,
-        cholesterol: 275,
-        fbs: 1,
-        fasting_blood_sugar: 145,
-        restecg: 2, // LV hypertrophy
-        resting_ecg: "Left Ventricular Hypertrophy",
-        thalach: 118,
-        heart_rate: 90,
-        exang: 1,
-        exercise_angina: "Yes",
-        oldpeak: 2.8,
-        st_depression: 2.8,
-        slope: 2, // downsloping
-        st_slope: "Downsloping",
-        ca: 2,
-        thal: 3, // reversible defect
-        ejection_fraction: 34,
-        serum_creatinine: 1.8,
-        height: 162,
-        weight: 86,
-        smoking: "Regularly",
-        exercise_days: "0-1 days",
-        sleep_hours: "Less than 5 hours",
-        stress_level: "High"
-      });
-    }
-  };
 
-  // Handle final submission
+  // Handle form submission
   const handleSubmitPrediction = async () => {
     setIsAnalyzing(true);
-    setAnalysisStage("Extracting 13 Cleveland ML Feature Vectors...");
+    setAnalysisStage("Evaluating patient biomarkers with LightGBM model...");
 
-    setTimeout(() => {
-      setAnalysisStage("Mapping [age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]...");
-    }, 600);
-
-    setTimeout(() => {
-      setAnalysisStage("Computing Risk Probability & SHAP Factor Weights...");
-    }, 1200);
-
-    setTimeout(async () => {
-      try {
-        const userEmail = localStorage.getItem("userEmail") || "";
-        const userName = localStorage.getItem("userName") || form.name || "Patient";
-        const submissionPayload = {
-          ...form,
-          user_email: userEmail,
-          name: form.name && form.name.trim() ? form.name.trim() : userName
-        };
-        const result = await api.predict(submissionPayload);
-        setIsAnalyzing(false);
-        navigate("/prediction-result", { state: { result, input: submissionPayload } });
-      } catch (err) {
-        console.error("Submission error:", err);
-        setIsAnalyzing(false);
-        navigate("/prediction-result", { state: { input: form } });
-      }
-    }, 1800);
+    try {
+      const userEmail = localStorage.getItem("userEmail") || "";
+      const userName = localStorage.getItem("userName") || form.name || "Patient";
+      const submissionPayload = {
+        ...form,
+        user_email: userEmail,
+        name: form.name && form.name.trim() ? form.name.trim() : userName
+      };
+      const result = await api.predict(submissionPayload);
+      navigate("/prediction-result", { state: { result, input: submissionPayload } });
+    } catch (err) {
+      console.error("Submission error:", err);
+      navigate("/prediction-result", { state: { input: form } });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -249,19 +127,19 @@ export default function NewPrediction() {
       <div className="dashboard-main-area">
         <Navbar onMobileMenuClick={() => setMobileOpen(true)} />
 
-        {/* SCANNING & NEURAL ANALYSIS MODAL OVERLAY */}
+        {/* LOADING MODAL OVERLAY */}
         {isAnalyzing && (
           <div className="analyzing-overlay">
             <div className="analyzing-modal">
               <div className="analyzing-spinner">
                 <Cpu size={42} className="spin-icon text-cyan" />
               </div>
-              <h3>ML Model Inference Engine Running</h3>
+              <h3>Analyzing Cardiovascular Risk</h3>
               <p className="analyzing-stage-text">{analysisStage}</p>
               <div className="analyzing-progress-track">
                 <div className="analyzing-progress-fill"></div>
               </div>
-              <small>Calibrated to 13 Cleveland / UCI Clinical Features (Target: `num`)</small>
+              <small>Evaluating 13 Cleveland features with LightGBM classifier</small>
             </div>
           </div>
         )}
@@ -275,31 +153,6 @@ export default function NewPrediction() {
               <p>Direct mapping for <code>[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]</code>.</p>
             </div>
 
-            {/* QUICK PRESET BUTTONS */}
-            <div className="preset-quick-pills">
-              <span className="preset-label">Load Sample Patient:</span>
-              <button
-                type="button"
-                className="preset-pill pill-low"
-                onClick={() => loadPreset("healthy")}
-              >
-                Healthy Athlete
-              </button>
-              <button
-                type="button"
-                className="preset-pill pill-mod"
-                onClick={() => loadPreset("moderate")}
-              >
-                Moderate Risk
-              </button>
-              <button
-                type="button"
-                className="preset-pill pill-high"
-                onClick={() => loadPreset("high")}
-              >
-                High Risk Alert
-              </button>
-            </div>
           </div>
 
           {/* 4-STEP PROGRESS BAR */}

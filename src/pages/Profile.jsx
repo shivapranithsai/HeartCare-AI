@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, Shield, Bell, Heart, Save, CheckCircle2, Trash2, Smartphone } from "lucide-react";
+import { Save, CheckCircle2, Trash2 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 
@@ -7,22 +7,29 @@ export default function Profile() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [savedAlert, setSavedAlert] = useState(false);
 
+  const currentEmail = localStorage.getItem("userEmail") || "";
+  const currentName = localStorage.getItem("userName") || "";
+
+  // Retrieve user-specific saved profile from localStorage or initialize with empty fields
+  const storageKey = currentEmail ? `user_profile_${currentEmail}` : "user_profile";
+  const savedData = JSON.parse(localStorage.getItem(storageKey) || "{}");
+
   const [profile, setProfile] = useState({
-    name: localStorage.getItem("userName") || "Aarav Sharma",
-    email: localStorage.getItem("userEmail") || "aarav.sharma@healthmail.in",
-    phone: "+91 98765 43210",
-    emergencyContact: "Dr. Priya Sharma (+91 98234 56789)",
-    bloodGroup: "B+",
-    allergies: "Penicillin, Sulfa antibiotics",
-    primaryPhysician: "Dr. Suresh Rao, MD, DM (Cardiology, AIIMS New Delhi)",
-    unitSystem: "Standard (mg/dL, mmHg)",
-    emailNotifications: true,
-    smsAlerts: true
+    name: savedData.name || currentName || "",
+    email: savedData.email || currentEmail || "",
+    phone: savedData.phone || "",
+    emergencyContact: savedData.emergencyContact || "",
+    bloodGroup: savedData.bloodGroup || "",
+    emailNotifications: savedData.emailNotifications || false,
+    smsAlerts: savedData.smsAlerts || false
   });
 
   const handleSave = (e) => {
     e.preventDefault();
-    localStorage.setItem("userName", profile.name);
+    if (profile.name.trim()) {
+      localStorage.setItem("userName", profile.name.trim());
+    }
+    localStorage.setItem(storageKey, JSON.stringify(profile));
     setSavedAlert(true);
     setTimeout(() => setSavedAlert(false), 2500);
   };
@@ -61,6 +68,7 @@ export default function Profile() {
                     type="text"
                     value={profile.name}
                     onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                    placeholder="Enter your full name"
                     required
                   />
                 </div>
@@ -70,14 +78,17 @@ export default function Profile() {
                     type="email"
                     value={profile.email}
                     onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                    placeholder=" "
+                    disabled
                   />
                 </div>
                 <div className="form-group">
                   <label>Primary Phone Number</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={profile.phone}
                     onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    placeholder=" "
                   />
                 </div>
                 <div className="form-group">
@@ -88,6 +99,7 @@ export default function Profile() {
                     onChange={(e) =>
                       setProfile({ ...profile, emergencyContact: e.target.value })
                     }
+                    placeholder=" "
                   />
                 </div>
               </div>
@@ -103,37 +115,16 @@ export default function Profile() {
                     value={profile.bloodGroup}
                     onChange={(e) => setProfile({ ...profile, bloodGroup: e.target.value })}
                   >
-                    <option>A+</option>
-                    <option>A-</option>
-                    <option>B+</option>
-                    <option>B-</option>
-                    <option>O+</option>
-                    <option>O-</option>
-                    <option>AB+</option>
-                    <option>AB-</option>
+                    <option value="">Select Blood Group (Optional)</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
                   </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Attending Cardiologist / Physician</label>
-                  <input
-                    type="text"
-                    value={profile.primaryPhysician}
-                    onChange={(e) =>
-                      setProfile({ ...profile, primaryPhysician: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div className="form-group" style={{ gridColumn: "1 / -1" }}>
-                  <label>Documented Allergies & Drug Contraindications</label>
-                  <input
-                    type="text"
-                    value={profile.allergies}
-                    onChange={(e) =>
-                      setProfile({ ...profile, allergies: e.target.value })
-                    }
-                  />
                 </div>
               </div>
             </div>

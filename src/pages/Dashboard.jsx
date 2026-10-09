@@ -112,8 +112,8 @@ export default function Dashboard() {
               <h1>Welcome back, {userName}!</h1>
               <p>
                 {isNewUser
-                  ? "Complete your health profile to calculate your risk score."
-                  : "Live personalized cardiac telemetry and biomarker intelligence."}
+                  ? "Complete an initial assessment to calculate your cardiovascular risk score."
+                  : "Personalized cardiac telemetry and biomarker overview."}
               </p>
             </div>
 
@@ -202,7 +202,7 @@ export default function Dashboard() {
             <StatCard
               title="Heart Health Score"
               value={latestAssessment ? `${latestAssessment.heart_health_score}/100` : "—"}
-              description={latestAssessment ? `Clinical Status: ${latestAssessment.risk_level}` : "Complete your health profile to calculate your risk score."}
+              description={latestAssessment ? `Clinical Status: ${latestAssessment.risk_level}` : "Pending initial assessment"}
               iconType="heart"
               variant="blue"
               trend={latestAssessment ? `${latestAssessment.probability_percentage}% Prob` : null}
@@ -211,7 +211,7 @@ export default function Dashboard() {
             <StatCard
               title="Cardiovascular Risk Index"
               value={latestAssessment ? `${latestAssessment.risk_score}%` : "—"}
-              description={latestAssessment ? "Calculated 10-year risk" : "Complete your health profile to calculate your risk score."}
+              description={latestAssessment ? "Calculated 10-year risk" : "No evaluation recorded"}
               iconType="activity"
               variant={latestAssessment?.risk_score >= 50 ? "orange" : "emerald"}
               trend={latestAssessment ? (latestAssessment.risk_score < 30 ? "Optimal Low" : latestAssessment.risk_score < 60 ? "Moderate Risk" : "High Alert") : null}
@@ -227,7 +227,7 @@ export default function Dashboard() {
             <StatCard
               title="Clinical Status"
               value={latestAssessment?.risk_level || "Not Evaluated"}
-              description={latestAssessment ? `Updated: ${latestAssessment.timestamp ? latestAssessment.timestamp.split(" ")[0] : "Recent"}` : "Complete your health profile to calculate your risk score."}
+              description={latestAssessment ? `Updated: ${latestAssessment.timestamp ? latestAssessment.timestamp.split(" ")[0] : "Recent"}` : "Pending assessment"}
               iconType="warning"
               variant={latestAssessment?.risk_score >= 60 ? "rose" : "cyan"}
             />
@@ -377,7 +377,7 @@ export default function Dashboard() {
                 <div style={{ textAlign: "center", padding: "32px 16px", color: "#64748b" }}>
                   <Clock size={32} style={{ color: "#94a3b8", marginBottom: "8px" }} />
                   <p style={{ fontSize: "13px", margin: 0, fontWeight: "600" }}>
-                    Complete your health profile to calculate your risk score.
+                    No risk distribution data yet.
                   </p>
                   <small style={{ color: "#94a3b8" }}>Run an evaluation to populate your cohort breakdown.</small>
                 </div>
@@ -408,7 +408,7 @@ export default function Dashboard() {
                   <div style={{ textAlign: "center", padding: "40px 20px" }}>
                     <ClipboardList size={36} style={{ color: "#94a3b8", marginBottom: "10px" }} />
                     <h4 style={{ fontSize: "16px", fontWeight: "700", color: "#334155", marginBottom: "4px" }}>
-                      Complete your health profile to calculate your risk score.
+                      No Assessment History Yet
                     </h4>
                     <p style={{ fontSize: "13px", color: "#64748b", maxWidth: "420px", margin: "0 auto 16px" }}>
                       No evaluations recorded yet for this account. Launch your first assessment to calculate your clinical risk index.
