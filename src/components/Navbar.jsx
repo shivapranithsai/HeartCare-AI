@@ -3,30 +3,9 @@ import { Search, Bell, Menu, CheckCircle2, AlertCircle, ChevronDown } from "luci
 import { api } from "../services/api";
 
 export default function Navbar({ onMobileMenuClick }) {
-  const [backendOnline, setBackendOnline] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const userName = localStorage.getItem("userName") || "Patient";
   const userInitials = userName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
-
-  useEffect(() => {
-    let isMounted = true;
-    api.checkHealth().then((res) => {
-      if (isMounted) {
-        setBackendOnline(res.status === "healthy");
-      }
-    });
-    const interval = setInterval(() => {
-      api.checkHealth().then((res) => {
-        if (isMounted) {
-          setBackendOnline(res.status === "healthy");
-        }
-      });
-    }, 15000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   return (
     <header className="topbar">
@@ -52,20 +31,6 @@ export default function Navbar({ onMobileMenuClick }) {
 
       {/* Right Area: Backend Status, Notifications, User */}
       <div className="topbar-right">
-        {/* Backend Connectivity Status Pill */}
-        <div className={`backend-status-pill ${backendOnline ? "status-online" : "status-offline"}`}>
-          {backendOnline ? (
-            <>
-              <span className="status-indicator-dot online"></span>
-              <span className="status-label">FastAPI Model Engine Online</span>
-            </>
-          ) : (
-            <>
-              <span className="status-indicator-dot offline"></span>
-              <span className="status-label">Client Mode (Backend Standby)</span>
-            </>
-          )}
-        </div>
 
         {/* Notifications */}
         <div className="notifications-dropdown-container">

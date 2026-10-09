@@ -59,8 +59,8 @@ export default function NewPrediction() {
     restecg: 0,
     resting_ecg: "Normal",
     
-    // 8. thalach (Maximum Heart Rate achieved in BPM)
-    thalach: 150,
+    // 8. thalach (Maximum Heart Rate achieved in BPM - target: 85% of 220 - age)
+    thalach: 141,
     heart_rate: 75,
     
     // 9. exang (Exercise Induced Angina: 1 = Yes, 0 = No)
@@ -203,7 +203,15 @@ export default function NewPrediction() {
                       min="18"
                       max="100"
                       value={form.age}
-                      onChange={(e) => updateForm("age", Number(e.target.value))}
+                      onChange={(e) => {
+                        const newAge = Number(e.target.value);
+                        updateForm("age", newAge);
+                        if (newAge >= 18 && newAge <= 100) {
+                          // Dynamically scale expected exercise heart rate with age (85% of 220 - age)
+                          const targetHr = Math.round((220 - newAge) * 0.85);
+                          updateForm("thalach", targetHr);
+                        }
+                      }}
                     />
                     <small className="field-hint">Range: 29 - 77 years</small>
                   </div>
@@ -324,7 +332,7 @@ export default function NewPrediction() {
                         updateForm("heart_rate", val);
                       }}
                     />
-                    <small className="field-hint">During exercise treadmill test (Range: 71 - 202 BPM)</small>
+                    <small className="field-hint">During exercise treadmill test (Age-matched target: ~{Math.max(60, Math.round((220 - (Number(form.age) || 50)) * 0.85))} BPM)</small>
                   </div>
 
                   <div className="form-group">
