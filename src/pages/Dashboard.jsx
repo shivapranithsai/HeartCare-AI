@@ -118,15 +118,6 @@ export default function Dashboard() {
             </div>
 
             <div className="header-action-group">
-              <button
-                type="button"
-                className={`secondary-action-btn ${liveStreamActive ? "status-online" : ""}`}
-                onClick={() => setLiveStreamActive(!liveStreamActive)}
-                title="Toggle live telemetry"
-              >
-                <Radio size={16} className={liveStreamActive ? "spin-pulse text-emerald" : ""} />
-                <span>{liveStreamActive ? "Telemetry Active" : "Stream Paused"}</span>
-              </button>
 
               <button className="secondary-action-btn" onClick={loadData} title="Sync latest data">
                 <RefreshCw size={16} className={loading ? "spin-icon" : ""} />

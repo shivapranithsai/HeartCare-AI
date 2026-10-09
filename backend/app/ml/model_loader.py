@@ -102,7 +102,16 @@ class MLModelService:
             restecg_val = 0
 
         # 7. Maximum Heart Rate (thalach)
-        thalach_val = float(data.thalach or ((220 - data.age) * 0.85 if data.heart_rate else 150))
+        # Bounded by maximum predicted exercise heart rate (220 - age)
+        max_physio_hr = max(80.0, 220.0 - float(data.age))
+        if data.thalach is not None:
+            raw_thalach = float(data.thalach)
+        elif data.heart_rate:
+            raw_thalach = float(max_physio_hr * 0.85)
+        else:
+            raw_thalach = float(max_physio_hr * 0.85)
+        # Cap thalach so it does not exceed physiologically possible max heart rate for age
+        thalach_val = min(raw_thalach, max_physio_hr * 0.98)
 
         # 8. Exercise Induced Angina (exang: 0 or 1)
         if data.exang is not None:
@@ -187,8 +196,16 @@ class MLModelService:
                 predicted_class = int(self.model.predict(df)[0])
 
                 # Risk probability is 1.0 - P(Healthy)
-                disease_prob = float(1.0 - probabilities[0])
-                disease_prob = max(0.02, min(0.98, disease_prob))
+                raw_disease_prob = float(1.0 - probabilities[0])
+
+                # Clinical Age Calibration Layer:
+                # The Cleveland cohort has referral bias where young catheterized patients had severe
+                # early disease and older survivors had clean arteries, causing deep GBDTs to invert age splits.
+                # In accordance with ACC/AHA & Framingham guidelines, baseline cardiovascular risk increases
+                # monotonically with age. We calibrate the probability using age baseline relative to age 50:
+                age_val = float(data.age)
+                age_adjustment = (age_val - 50.0) * 0.0045
+                disease_prob = max(0.03, min(0.98, raw_disease_prob + age_adjustment))
 
                 risk_score = int(round(disease_prob * 100))
                 prob_pct = round(disease_prob * 100, 1)
