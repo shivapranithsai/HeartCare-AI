@@ -18,9 +18,23 @@ class UserProfile(BaseModel):
     role: str
     created_at: str
     last_login: Optional[str] = None
+    phone: Optional[str] = ""
+    emergency_contact: Optional[str] = ""
+    blood_group: Optional[str] = ""
+    email_notifications: Optional[bool] = False
+    sms_alerts: Optional[bool] = False
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    blood_group: Optional[str] = None
+    email_notifications: Optional[bool] = False
+    sms_alerts: Optional[bool] = False
 
 class AuthResponse(BaseModel):
     status: str
     message: str
     access_token: str
     user: UserProfile
+

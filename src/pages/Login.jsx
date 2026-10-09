@@ -10,7 +10,6 @@ import {
   User,
   Eye,
   EyeOff,
-  KeyRound,
   AlertCircle,
   Loader2
 } from "lucide-react";
@@ -51,7 +50,7 @@ export default function Login() {
           setLoading(false);
           return;
         }
-        authResponse = await api.register(name.trim(), emailTrimmed, password, "Clinician / Practitioner");
+        authResponse = await api.register(name.trim(), emailTrimmed, password, "Cardiologist / Physician");
       } else {
         authResponse = await api.login(emailTrimmed, password);
       }
@@ -60,17 +59,15 @@ export default function Login() {
         const u = authResponse.user;
         localStorage.setItem("userName", u.name || "Clinician");
         localStorage.setItem("userEmail", u.email || emailTrimmed);
-        localStorage.setItem("userRole", u.role || "Clinician / Practitioner");
+        localStorage.setItem("userRole", u.role || "Cardiologist / Physician");
         localStorage.setItem("authToken", authResponse.access_token || "auth_valid");
         localStorage.setItem("isAuthenticated", "true");
 
-        // Immediate robust redirect to Dashboard
         navigate("/dashboard", { replace: true });
       } else {
         setErrorMsg("Authentication failed. Please check your credentials.");
       }
     } catch (err) {
-      console.error("Auth error:", err);
       setErrorMsg(err.message || "An error occurred during authentication.");
     } finally {
       setLoading(false);
@@ -82,42 +79,42 @@ export default function Login() {
       {/* LEFT SHOWCASE BANNER */}
       <div className="login-left-banner">
         <div className="banner-overlay">
-          <div className="banner-brand" onClick={() => navigate("/")}>
+          <div className="banner-brand" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
             <div className="banner-logo">
               <Heart size={24} fill="#ffffff" />
             </div>
             <div>
               <h2>HeartCare<span>.AI</span></h2>
-              <span>Clinical Health Intelligence</span>
+              <span>Cardiovascular Health Intelligence</span>
             </div>
           </div>
 
           <div className="banner-hero-text">
-            <span className="banner-tag">SECURE CLINICAL WORKSPACE</span>
-            <h1>Cardiovascular Machine Learning Platform</h1>
+            <span className="banner-tag">SECURE CLINICAL PORTAL</span>
+            <h1>Optimized Machine Learning System for Heart Failure Prediction</h1>
             <p>
-              Evidence-based 13-biomarker risk stratification, LightGBM multi-class predictive modeling, and continuous longitudinal telemetry.
+              The heart disease prediction system uses machine learning models to predict the likelihood of heart disease in a patient based on various clinical features. It provides insights into the patient's risk factors and helps in decision for treatment
             </p>
 
             <div className="banner-checkmarks">
               <div className="check-item">
                 <CheckCircle2 size={18} className="text-emerald" />
-                <span>Active 13-feature Cleveland ML inference engine</span>
+                <span>13-feature Cleveland UCI machine learning engine</span>
               </div>
               <div className="check-item">
                 <CheckCircle2 size={18} className="text-emerald" />
-                <span>Explainable AI with SHAP-style biomarker attribution</span>
+                <span>Feature impact attribution & risk explainability</span>
               </div>
               <div className="check-item">
                 <CheckCircle2 size={18} className="text-emerald" />
-                <span>Real-time What-If intervention simulation</span>
+                <span>Interactive What-If clinical intervention simulation</span>
               </div>
             </div>
           </div>
 
           <div className="banner-footer-security">
             <Shield size={16} className="text-emerald" />
-            <span>End-to-End HIPAA & GDPR Privacy Compliant Architecture</span>
+            <span>Secure Role-Based Authentication & SHA-256 Hashing</span>
           </div>
         </div>
       </div>
@@ -129,12 +126,11 @@ export default function Login() {
             <h2>{isSignUp ? "Create Clinical Account" : "Sign In to HeartCare AI"}</h2>
             <p>
               {isSignUp
-                ? "Register your credentials to access the AI diagnostic portal."
-                : "Enter your clinical credentials to access your diagnostic workspace."}
+                ? "Register your credentials to access the diagnostic portal."
+                : "Enter your registered email and password to access your dashboard."}
             </p>
           </div>
 
-          {/* ERROR NOTIFICATION ALERT */}
           {errorMsg && (
             <div
               style={{
@@ -189,7 +185,7 @@ export default function Login() {
                   <User size={18} className="input-icon text-muted" />
                   <input
                     type="text"
-                    placeholder="e.g. Dr. Sarah Jenkins, MD"
+                    placeholder="Enter your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
@@ -204,7 +200,7 @@ export default function Login() {
                 <Mail size={18} className="input-icon text-muted" />
                 <input
                   type="email"
-                  placeholder="name@hospital.org"
+                  placeholder=" "
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -217,7 +213,7 @@ export default function Login() {
                 <label>Password</label>
                 {!isSignUp && (
                   <span
-                    onClick={() => alert("Password reset instructions sent to your registered email.")}
+                    onClick={() => alert("Password reset: Please contact your system administrator.")}
                     style={{ fontSize: "12px", color: "var(--primary)", cursor: "pointer", fontWeight: "600" }}
                   >
                     Forgot Password?
@@ -228,7 +224,7 @@ export default function Login() {
                 <Lock size={18} className="input-icon text-muted" />
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••••••"
+                  placeholder=" "
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -264,7 +260,7 @@ export default function Login() {
                 </>
               ) : (
                 <>
-                  <span>{isSignUp ? "Register Clinical Account" : "Sign In to Workspace"}</span>
+                  <span>{isSignUp ? "Register Account" : "Sign In to Workspace"}</span>
                   <ArrowRight size={18} />
                 </>
               )}
@@ -275,7 +271,7 @@ export default function Login() {
           <div style={{ marginTop: "24px", textAlign: "center", fontSize: "14px", color: "#64748b" }}>
             {isSignUp ? (
               <span>
-                Already have a clinical account?{" "}
+                Already have an account?{" "}
                 <button
                   type="button"
                   onClick={() => {

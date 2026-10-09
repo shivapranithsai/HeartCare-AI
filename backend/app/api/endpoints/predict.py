@@ -1,4 +1,3 @@
-import json
 from fastapi import APIRouter, HTTPException, status
 from app.schemas.prediction import PatientInput, PredictionResponse, SimulationInput
 from app.ml.model_loader import ml_service
@@ -8,13 +7,16 @@ router = APIRouter()
 
 @router.post("/predict", response_model=PredictionResponse)
 def run_prediction(data: PatientInput):
+    """
+    Executes heart failure risk inference on the submitted patient biomarkers
+    and persists the assessment record into MongoDB.
+    """
     try:
-        # Run ML inference
+        # Run ML model inference and clinical evaluation
         result = ml_service.predict(data)
 
-        # Persist to MongoDB assessments collection
         db = get_db()
-        
+
         sbp = data.systolic_bp or (150 if data.blood_pressure == "High" else 135 if data.blood_pressure == "Elevated" else 120)
         dbp = data.diastolic_bp or (95 if data.blood_pressure == "High" else 85 if data.blood_pressure == "Elevated" else 78)
 
@@ -36,7 +38,7 @@ def run_prediction(data: PatientInput):
             "heart_health_score": result.heart_health_score,
             "systolic_bp": sbp,
             "diastolic_bp": dbp,
-            "cholesterol": data.cholesterol,
+            "cholesterol": data.cholesterol or data.chol,
             "ejection_fraction": data.ejection_fraction,
             "serum_creatinine": data.serum_creatinine,
             "smoking": data.smoking,
@@ -44,38 +46,62 @@ def run_prediction(data: PatientInput):
             "model_source": result.model_source,
             "summary_message": result.summary_message,
             "input_data": input_dict,
-            "input_data_json": json.dumps(input_dict),
-            "response_data": result_dict,
-            "response_data_json": json.dumps(result_dict)
+            "response_data": result_dict
         }
 
         db.assessments.insert_one(assessment_doc)
-
         return result
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Prediction computation error: {str(e)}"
+            detail=f"Prediction calculation error: {str(e)}"
         )
 
 @router.post("/simulate")
 def run_what_if_simulation(sim_data: SimulationInput):
     """
-    Simulates changes to health parameters to demonstrate how interventions
-    (e.g., lowering blood pressure, stopping smoking, exercising more) impact risk.
+    Simulates changes to health parameters (e.g. lowering blood pressure,
+    stopping smoking, or increasing physical activity) to quantify risk reduction.
     """
     try:
-        base = sim_data.base_input.model_dump()
+        base_dict = sim_data.base_input.model_dump()
         base_result = ml_service.predict(sim_data.base_input)
-        
-        # Apply modified parameters
-        for k, v in sim_data.modified_params.items():
-            if hasattr(sim_data.base_input, k):
-                base[k] = v
-                
-        mod_input = PatientInput(**base)
-        simulated_result = ml_service.predict(mod_input)
-        
+
+        # Apply modified health parameters
+        for param, val in sim_data.modified_params.items():
+            if hasattr(sim_data.base_input, param):
+                base_dict[param] = val
+
+        # Ensure bidirectional alias updates for simulated features
+        if "systolic_bp" in sim_data.modified_params:
+            base_dict["trestbps"] = sim_data.modified_params["systolic_bp"]
+        elif "trestbps" in sim_data.modified_params:
+            base_dict["systolic_bp"] = sim_data.modified_params["trestbps"]
+
+        if "cholesterol" in sim_data.modified_params:
+            base_dict["chol"] = sim_data.modified_params["cholesterol"]
+        elif "chol" in sim_data.modified_params:
+            base_dict["cholesterol"] = sim_data.modified_params["chol"]
+
+        if "heart_rate" in sim_data.modified_params:
+            base_dict["thalach"] = sim_data.modified_params["heart_rate"]
+        elif "thalach" in sim_data.modified_params:
+            base_dict["heart_rate"] = sim_data.modified_params["thalach"]
+
+        if "st_depression" in sim_data.modified_params:
+            base_dict["oldpeak"] = sim_data.modified_params["st_depression"]
+        elif "oldpeak" in sim_data.modified_params:
+            base_dict["st_depression"] = sim_data.modified_params["oldpeak"]
+
+        if "fasting_blood_sugar" in sim_data.modified_params:
+            base_dict["fbs"] = 1 if sim_data.modified_params["fasting_blood_sugar"] > 120 else 0
+        elif "fbs" in sim_data.modified_params:
+            base_dict["fasting_blood_sugar"] = 140 if sim_data.modified_params["fbs"] == 1 else 95
+
+        simulated_input = PatientInput(**base_dict)
+        simulated_result = ml_service.predict(simulated_input)
+
         delta_score = simulated_result.risk_score - base_result.risk_score
         delta_prob = round(simulated_result.probability_percentage - base_result.probability_percentage, 1)
 
@@ -101,5 +127,5 @@ def run_what_if_simulation(sim_data: SimulationInput):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Simulation error: {str(e)}"
+            detail=f"Simulation calculation error: {str(e)}"
         )

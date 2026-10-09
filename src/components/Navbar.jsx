@@ -5,7 +5,7 @@ import { api } from "../services/api";
 export default function Navbar({ onMobileMenuClick }) {
   const [backendOnline, setBackendOnline] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const userName = localStorage.getItem("userName") || "Aarav Sharma";
+  const userName = localStorage.getItem("userName") || "Patient";
   const userInitials = userName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
 
   useEffect(() => {

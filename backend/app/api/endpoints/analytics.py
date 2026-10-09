@@ -1,19 +1,27 @@
 import json
+from typing import Optional, Annotated
 from fastapi import APIRouter, Query
-from typing import Optional
 import pymongo
 from app.db.database import get_db
 
 router = APIRouter()
 
 @router.get("")
-def get_analytics_overview(user_email: Optional[str] = Query(None, description="Filter by logged-in user email")):
+def get_analytics_overview(
+    user_email: Annotated[Optional[str], Query(description="Filter by logged-in user email")] = None
+):
+    """
+    Computes summary analytics for the user's dashboard:
+    - Average risk and health scores
+    - Categorical risk distribution
+    - Most recent assessment record
+    - Historical timeline data for trend charts
+    """
     db = get_db()
-
     match_filter = {}
-    clean_email = str(user_email).strip().lower() if isinstance(user_email, str) and user_email.strip() and user_email.strip().lower() != "none" else None
-    if clean_email:
-        match_filter["user_email"] = clean_email
+
+    if user_email and isinstance(user_email, str) and user_email.strip() and user_email.strip().lower() != "none":
+        match_filter["user_email"] = user_email.strip().lower()
 
     total = db.assessments.count_documents(match_filter)
 
@@ -28,8 +36,8 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
             "timeline": []
         }
 
-    # Aggregate averages and distribution
-    pipeline = [
+    # 1. Compute averages using MongoDB aggregation
+    avg_pipeline = [
         {"$match": match_filter},
         {
             "$group": {
@@ -39,11 +47,11 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
             }
         }
     ]
-    agg_res = list(db.assessments.aggregate(pipeline))
+    agg_res = list(db.assessments.aggregate(avg_pipeline))
     avg_risk = agg_res[0]["avg_risk"] if agg_res else None
     avg_health = agg_res[0]["avg_health"] if agg_res else None
 
-    # Distribution pipeline
+    # 2. Risk distribution breakdown
     dist_pipeline = [
         {"$match": match_filter},
         {
@@ -54,18 +62,19 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
         }
     ]
     dist_rows = list(db.assessments.aggregate(dist_pipeline))
-    dist = {"Low Risk": 0, "Moderate Risk": 0, "High Risk": 0, "Critical Risk": 0}
+    distribution = {"Low Risk": 0, "Moderate Risk": 0, "High Risk": 0, "Critical Risk": 0}
     for row in dist_rows:
         level = row.get("_id") or ""
         cnt = row.get("count", 0)
-        for k in dist:
-            if k.lower() in level.lower():
-                dist[k] += cnt
+        for key in distribution:
+            if key.lower() in level.lower():
+                distribution[key] += cnt
                 break
 
-    # Fetch latest evaluation for this user
+    # 3. Latest assessment
     latest_row = db.assessments.find_one(match_filter, sort=[("timestamp", pymongo.DESCENDING), ("_id", pymongo.DESCENDING)])
     latest_assessment = None
+
     if latest_row:
         resp_data = latest_row.get("response_data") or {}
         if not resp_data and latest_row.get("response_data_json"):
@@ -108,13 +117,12 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
             "model_source": latest_row.get("model_source", "HeartCare LightGBM")
         }
 
-    # Recent timeline points for graph
+    # 4. Timeline trend points for area/line charts
     timeline_cursor = db.assessments.find(
         match_filter,
         projection={"id": 1, "timestamp": 1, "risk_score": 1, "heart_health_score": 1, "patient_name": 1, "risk_level": 1}
     ).sort([("timestamp", pymongo.ASCENDING)]).limit(20)
 
-    timeline_rows = list(timeline_cursor)
     timeline = [
         {
             "id": r.get("id", ""),
@@ -124,7 +132,7 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
             "patient": r.get("patient_name"),
             "risk_level": r.get("risk_level")
         }
-        for r in timeline_rows
+        for r in timeline_cursor
     ]
 
     return {
@@ -133,6 +141,6 @@ def get_analytics_overview(user_email: Optional[str] = Query(None, description="
         "total_assessments": total,
         "average_risk_score": round(avg_risk, 1) if avg_risk is not None else None,
         "average_health_score": round(avg_health, 1) if avg_health is not None else None,
-        "risk_distribution": dist,
+        "risk_distribution": distribution,
         "timeline": timeline
     }

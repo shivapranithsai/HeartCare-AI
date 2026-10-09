@@ -1,13 +1,21 @@
 import json
-from fastapi import APIRouter, HTTPException
+from typing import Optional, Annotated
+from fastapi import APIRouter, HTTPException, Query
 from app.db.database import get_db
 
 router = APIRouter()
 
 @router.get("/{id}")
-def generate_clinical_report(id: str):
+def generate_clinical_report(
+    id: str,
+    user_email: Annotated[Optional[str], Query(description="Filter by user email for owner authorization")] = None
+):
     db = get_db()
-    row = db.assessments.find_one({"id": id})
+    query = {"id": id}
+    if user_email and isinstance(user_email, str) and user_email.strip() and user_email.strip().lower() != "none":
+        query["user_email"] = user_email.strip().lower()
+
+    row = db.assessments.find_one(query)
 
     if not row:
         raise HTTPException(status_code=404, detail="Assessment not found for report generation")

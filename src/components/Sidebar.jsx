@@ -15,7 +15,7 @@ import {
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const navigate = useNavigate();
-  const userName = localStorage.getItem("userName") || "Aarav Sharma";
+  const userName = localStorage.getItem("userName") || "Patient";
   const userInitials = userName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
 
   const handleLogout = () => {

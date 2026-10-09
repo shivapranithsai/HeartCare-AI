@@ -26,7 +26,7 @@ export default function Reports() {
   const [historyItems, setHistoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const userName = localStorage.getItem("userName") || "Aarav Sharma";
+  const userName = localStorage.getItem("userName") || "Patient";
   const userEmail = localStorage.getItem("userEmail") || "";
 
   useEffect(() => {
