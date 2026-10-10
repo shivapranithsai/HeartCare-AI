@@ -136,7 +136,7 @@ def add_chapter_9(doc):
         "Key configuration keys include:"
     )
     add_bullet(doc, "`PORT`: ", "Specifies the listening port (Render dynamically allocates this, default: 8000).")
-    add_bullet(doc, "`MONGODB_URI`: ", "Secure connection string format: `mongodb+srv://<username>:<password>@heart-failure.phsnwdd.mongodb.net/heartcare?retryWrites=true&w=majority`")
+    add_bullet(doc, "`MONGODB_URI`: ", "Secure connection string format: `mongodb+srv://<username>:<password>@cluster0.example.mongodb.net/heartcare?retryWrites=true&w=majority`")
     add_bullet(doc, "`MONGODB_DB_NAME`: ", "Active database name (`heartcare`).")
     add_bullet(doc, "`VITE_API_BASE_URL`: ", "Public HTTPS API base endpoint (`https://heartcare-ai-kcjl.onrender.com/api`).")
 

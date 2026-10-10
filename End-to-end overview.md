@@ -374,7 +374,7 @@ VERSION=1.0.0
 API_V1_STR=/api
 
 # MongoDB Atlas Configuration
-MONGODB_URI=mongodb+srv://REDACTED
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.example.mongodb.net/heartcare?retryWrites=true&w=majority
 MONGODB_DB_NAME=heartcare
 ```
 
