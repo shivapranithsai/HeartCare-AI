@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Heart,
@@ -11,6 +11,8 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  AlertTriangle,
+  RefreshCw,
   Loader2
 } from "lucide-react";
 import { api } from "../services/api";
@@ -26,9 +28,73 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
+  // Cloud Backend Cold-Start Lifecycle States (for Render / Vercel deployment)
+  const [serverState, setServerState] = useState({
+    status: "checking", // "checking" | "waking" | "ready" | "timeout" | "error"
+    message: "Connecting to server...",
+    elapsed: 0,
+    remaining: 90
+  });
+  const [wakeAttempt, setWakeAttempt] = useState(0);
+
+  // Proactively wake up backend as soon as the login screen mounts or on manual retry
+  useEffect(() => {
+    let isCancelled = false;
+    const abortController = new AbortController();
+
+    const initiateWakeUp = async () => {
+      try {
+        await api.waitForServerReady(
+          (update) => {
+            if (!isCancelled && !abortController.signal.aborted) {
+              setServerState(update);
+            }
+          },
+          {
+            maxWaitMs: 90000,
+            pollIntervalMs: 5000,
+            signal: abortController.signal
+          }
+        );
+      } catch (err) {
+        if (!isCancelled && !abortController.signal.aborted) {
+          setServerState({
+            status: "error",
+            message: "Unable to reach the server. Please verify your connection.",
+            elapsed: 0,
+            remaining: 0
+          });
+        }
+      }
+    };
+
+    initiateWakeUp();
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+    };
+  }, [wakeAttempt]);
+
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    // Only allow submission when serverState.status is "ready"
+    if (serverState.status !== "ready") {
+      if (serverState.status === "waking") {
+        setErrorMsg("The cloud server is currently waking up. Please wait until the server is ready before submitting.");
+      } else if (serverState.status === "checking") {
+        setErrorMsg("Checking server status. Please wait a moment until the connection is established.");
+      } else if (serverState.status === "timeout") {
+        setErrorMsg("The server took too long to wake up. Please click 'Retry Waking Server' above.");
+      } else if (serverState.status === "error") {
+        setErrorMsg("Unable to connect to the server. Please click 'Retry Waking Server' above.");
+      } else {
+        setErrorMsg("Server is not ready yet. Please wait.");
+      }
+      return;
+    }
 
     const emailTrimmed = email.trim();
     if (!emailTrimmed) {
@@ -68,7 +134,17 @@ export default function Login() {
         setErrorMsg("Authentication failed. Please check your credentials.");
       }
     } catch (err) {
-      setErrorMsg(err.message || "An error occurred during authentication.");
+      const msg = (err && err.message) ? String(err.message) : "An error occurred during authentication.";
+      if (
+        msg.includes("aborted without reason") ||
+        msg.includes("AbortError") ||
+        msg.includes("timed out") ||
+        msg.includes("timeout")
+      ) {
+        setErrorMsg("Connection timed out. The server may still be warming up from an idle state. Please try again.");
+      } else {
+        setErrorMsg(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -130,6 +206,70 @@ export default function Login() {
                 : "Enter your registered email and password to access your dashboard."}
             </p>
           </div>
+
+          {/* RENDER CLOUD SERVER COLD-START STATUS BANNER */}
+          {serverState.status === "waking" && (
+            <div className="server-wake-card waking">
+              <Loader2 size={18} className="spin-icon text-amber" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <div className="wake-info">
+                <strong>Waking up the server. This may take up to a minute...</strong>
+                <p>
+                  Render free-tier hosting spins down when idle. Starting cloud instance ({serverState.elapsed}s / 90s)...
+                </p>
+                <div className="wake-progress-bar">
+                  <div
+                    className="wake-progress-fill"
+                    style={{ width: `${Math.min(100, Math.max(8, Math.round((serverState.elapsed / 90) * 100)))}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {serverState.status === "ready" && serverState.elapsed > 2 && (
+            <div className="server-wake-card ready">
+              <CheckCircle2 size={18} className="text-emerald" style={{ flexShrink: 0, marginTop: "1px" }} />
+              <div className="wake-info">
+                <strong>Server is online and ready.</strong>
+                <p>Clinical diagnostic backend is connected. You can now sign in.</p>
+              </div>
+            </div>
+          )}
+
+          {(serverState.status === "timeout" || serverState.status === "error") && (
+            <div className={`server-wake-card ${serverState.status === "timeout" ? "timeout" : "error"}`}>
+              <AlertTriangle size={18} className="text-rose" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <div className="wake-info">
+                <strong>
+                  {serverState.status === "timeout"
+                    ? "Server wake-up timed out (90s)"
+                    : "Server connection failed"}
+                </strong>
+                <p>
+                  {serverState.status === "timeout"
+                    ? "The cloud backend took longer than 90 seconds to start. Free-tier servers occasionally experience delayed boot times."
+                    : serverState.message || "Unable to reach the server. Please verify your connection or try waking it again."}
+                </p>
+                <button
+                  type="button"
+                  className="wake-retry-action-btn"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setServerState({
+                      status: "checking",
+                      message: "Reconnecting to server...",
+                      elapsed: 0,
+                      remaining: 90
+                    });
+                    setWakeAttempt((prev) => prev + 1);
+                  }}
+                >
+                  <RefreshCw size={13} />
+                  <span>Retry Waking Server</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {errorMsg && (
             <div
@@ -252,11 +392,35 @@ export default function Login() {
               </label>
             </div>
 
-            <button type="submit" className="login-submit-btn" disabled={loading}>
+            <button
+              type="submit"
+              className="login-submit-btn"
+              disabled={loading || serverState.status !== "ready"}
+            >
               {loading ? (
                 <>
                   <Loader2 size={18} className="spin-icon" />
                   <span>Authenticating...</span>
+                </>
+              ) : serverState.status === "checking" ? (
+                <>
+                  <Loader2 size={18} className="spin-icon" />
+                  <span>Connecting to Server...</span>
+                </>
+              ) : serverState.status === "waking" ? (
+                <>
+                  <Loader2 size={18} className="spin-icon" />
+                  <span>Waking Server ({serverState.elapsed}s)...</span>
+                </>
+              ) : serverState.status === "timeout" ? (
+                <>
+                  <RefreshCw size={18} />
+                  <span>Server Offline – Click Retry Above</span>
+                </>
+              ) : serverState.status === "error" ? (
+                <>
+                  <AlertCircle size={18} />
+                  <span>Connection Error – Click Retry Above</span>
                 </>
               ) : (
                 <>

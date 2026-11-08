@@ -36,5 +36,3 @@ CORS_ORIGINS = [
     "*"
 ]
 
-# Legacy Database path for SQLite migration
-DB_PATH = DATA_DIR / "heartcare.db"

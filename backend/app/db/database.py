@@ -21,24 +21,58 @@ def hash_password(password: str) -> str:
 
 def get_mongo_client() -> MongoClient:
     """
-    Returns a singleton MongoClient instance to reuse connections across requests.
+    Returns a singleton MongoClient instance connected exclusively to MongoDB Atlas.
+    Reuses connection pool across requests.
+    Validates connection with ping and raises a clear exception if Atlas is unreachable or fails authentication.
     """
     global _mongo_client
     if _mongo_client is None:
-        if not MONGODB_URI:
-            raise ValueError("MONGODB_URI environment variable is missing. Please check your .env file.")
-        _mongo_client = MongoClient(
-            MONGODB_URI,
-            serverSelectionTimeoutMS=8000,
-            connectTimeoutMS=8000,
-            socketTimeoutMS=10000,
-            maxPoolSize=50,
-            minPoolSize=5
-        )
+        uri = (MONGODB_URI or "").strip()
+        if not uri:
+            raise ValueError(
+                "MONGODB_URI environment variable is missing or empty. "
+                "Please configure your MongoDB Atlas connection string in the backend .env file."
+            )
+
+        client = None
+        try:
+            client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=8000,
+                connectTimeoutMS=8000,
+                socketTimeoutMS=10000,
+                maxPoolSize=50,
+                minPoolSize=5
+            )
+            # Verify connectivity directly against MongoDB Atlas
+            client.admin.command("ping")
+            _mongo_client = client
+            print("[MongoDB Atlas] Connected and authenticated successfully.")
+        except Exception as e:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            _mongo_client = None
+            raise ConnectionError(
+                f"Failed to connect or authenticate to MongoDB Atlas: {type(e).__name__}: {e}"
+            ) from e
+
     return _mongo_client
 
+def close_mongo_client() -> None:
+    """Closes the singleton MongoClient instance if active."""
+    global _mongo_client
+    if _mongo_client is not None:
+        try:
+            _mongo_client.close()
+        except Exception:
+            pass
+        _mongo_client = None
+
 def get_db() -> Database:
-    """Returns the MongoDB database instance."""
+    """Returns the MongoDB Atlas database instance."""
     client = get_mongo_client()
     return client[MONGODB_DB_NAME]
 
@@ -48,14 +82,15 @@ def get_db_connection() -> Database:
 
 def init_db() -> bool:
     """
-    Initializes the MongoDB connection, creates collection indexes,
+    Initializes MongoDB Atlas, ensures collection indexes,
     and seeds default clinical accounts and hospitals if collections are empty.
+    Preserves all existing Atlas data safely.
     """
     try:
         db = get_db()
         # Verify connection
         db.command("ping")
-        print("[MongoDB] Connected successfully.")
+        print("[MongoDB Atlas] Connection verified. Initializing indexes...")
 
         # 1. Users collection
         db.users.create_index("email", unique=True)
@@ -84,7 +119,7 @@ def init_db() -> bool:
                 }
             ]
             db.users.insert_many(seed_users)
-            print("[MongoDB] Seeded default user accounts.")
+            print("[MongoDB Atlas] Seeded default user accounts.")
 
         # 2. Assessments collection
         db.assessments.create_index("id", unique=True)
@@ -99,7 +134,7 @@ def init_db() -> bool:
 
         for h in DEFAULT_INDIAN_HOSPITALS:
             db.hospitals.update_one({"id": h["id"]}, {"$set": h}, upsert=True)
-        print(f"[MongoDB] Synchronized {len(DEFAULT_INDIAN_HOSPITALS)} Indian cardiology centers.")
+        print(f"[MongoDB Atlas] Synchronized {len(DEFAULT_INDIAN_HOSPITALS)} Indian cardiology centers.")
 
         # 4. Appointments collection
         db.appointments.create_index("booking_id", unique=True)
@@ -108,8 +143,8 @@ def init_db() -> bool:
         return True
 
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-        print(f"[MongoDB Error] Connection failed: {e}")
+        print(f"[MongoDB Atlas Error] Connection failed: {e}")
         return False
     except Exception as e:
-        print(f"[MongoDB Error] Initialization failed: {e}")
+        print(f"[MongoDB Atlas Error] Initialization failed: {e}")
         return False

@@ -87,8 +87,22 @@ Thumbs.db
 [Dd]esktop.ini
 
 # ==========================================
-# Local Database Temp Files & Journals
+# Local Database Files & Journals
 # ==========================================
+*.db
+*.sqlite
+*.sqlite3
 *.db-journal
 *.db-wal
 *.db-shm
+
+# ==========================================
+# Local Scripts & Scratch Tests
+# ==========================================
+audit_repo_secrets.py
+scratch_*.py
+run_backend.bat
+test_*.cjs
+backend/check_databases.py
+backend/test_atlas.py
+backend/test_atlas_verification.py

@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Ensure backend directory is in Python module search path
+backend_dir = Path(__file__).resolve().parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -5,18 +13,18 @@ import datetime
 
 from app.core.config import PROJECT_NAME, VERSION, API_V1_STR, CORS_ORIGINS
 from app.api.router import api_router
-from app.db.database import init_db
+from app.db.database import init_db, close_mongo_client
 from app.ml.model_loader import ml_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize MongoDB and load ML model
+    # Startup: initialize MongoDB Atlas and load ML model
     print("[Server Startup] Connecting to MongoDB Atlas...")
     connected = init_db()
     if connected:
-        print("[Server Startup] MongoDB connected successfully.")
+        print("[Server Startup] MongoDB Atlas connected successfully.")
     else:
-        print("[Server Startup] Warning: MongoDB initialization failed. Please verify MONGODB_URI in .env.")
+        print("[Server Startup] Warning: MongoDB Atlas initialization failed. Please verify MONGODB_URI in .env.")
     
     print("[Server Startup] Checking ML Model Service status...")
     if ml_service.is_custom_loaded:
@@ -24,6 +32,8 @@ async def lifespan(app: FastAPI):
     else:
         print("[Server Startup] Running with AHA/Cleveland Clinical Heuristic Engine.")
     yield
+    print("[Server Shutdown] Closing MongoDB Atlas connections...")
+    close_mongo_client()
     print("[Server Shutdown] Cleanup complete.")
 
 app = FastAPI(
@@ -69,4 +79,4 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, app_dir=str(backend_dir))
